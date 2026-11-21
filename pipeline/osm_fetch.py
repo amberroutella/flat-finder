@@ -154,9 +154,40 @@ def fetch_pois():
     print("pois", Counter(p["k"] for p in out))
 
 
+NAMED_QUERY = """[out:json][timeout:280];(
+  way["building"~"^(apartments|residential|dormitory)$"]["name"]{bb};
+  relation["building"="apartments"]["name"]{bb};
+  node["building"="apartments"]["name"]{bb};
+  node["place"~"^(neighbourhood|suburb|quarter)$"]["name"]{bb};
+  way["place"~"^(neighbourhood|suburb|quarter)$"]["name"]{bb};
+);out center tags;"""
+
+
+def fetch_named():
+    """Named apartment buildings (points or footprints) and named neighbourhoods, for cities where few
+    residential areas are mapped. osm_projects.py turns the first into societies and uses the second as localities."""
+    s, w, n, e = BBOX
+    data = overpass(NAMED_QUERY.replace("{bb}", f"({s},{w},{n},{e})"), "named")
+    out = []
+    for el in data["elements"]:
+        t = el.get("tags", {})
+        c = el.get("center") or ({"lat": el["lat"], "lon": el["lon"]} if "lat" in el else None)
+        if not c or not t.get("name"):
+            continue
+        out.append({"osm": f"{el['type']}/{el['id']}", "name": t["name"], "lng": round(c["lon"], 6), "lat": round(c["lat"], 6),
+                    "kind": "place" if t.get("place") else "society"})
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "osm_named.json").write_text(json.dumps(out))
+    from collections import Counter
+    print("named", Counter(o["kind"] for o in out))
+
+
 if __name__ == "__main__":
     if "pois" in sys.argv:
         fetch_pois()
+    elif "named" in sys.argv:
+        fetch_named()
     else:
         main()
         fetch_pois()
+        fetch_named()

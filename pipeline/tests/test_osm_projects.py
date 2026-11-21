@@ -55,3 +55,33 @@ def test_can_rerun_over_its_own_output(city):
     write_areas(city, [feat("way/2", "Green Valley Apartments", square(78.2, 30.2, 100))])
     osm_projects.build("testville")
     assert len(osm_projects.build("testville")) == 1
+
+
+def write_named(city, items):
+    (city / "osm_named.json").write_text(json.dumps(items))
+
+
+def named(osm, name, lng, lat, kind="society"):
+    return {"osm": osm, "name": name, "lng": lng, "lat": lat, "kind": kind}
+
+
+def test_named_buildings_become_societies_with_place_locality(city):
+    write_areas(city, [feat("way/2", "Green Valley Apartments", square(78.2, 30.2, 100))])
+    write_named(city, [
+        named("node/10", "Rajpur", 78.3, 30.3, "place"),
+        named("way/11", "Sunrise Residency", 78.301, 30.301),          # new society, ~140 m from the place node
+        named("way/12", "Green Valley Apartments", 78.2002, 30.2002),   # same name next to the area society: skipped
+        named("way/13", "Tower B", 78.31, 30.31),                       # a part of a complex: skipped
+        named("way/14", "City Hospital Staff Quarters", 78.32, 30.32),  # not a society by name
+        named("way/15", "Nowhere Heights", 79.5, 31.5),                 # outside the box
+    ])
+    names = [p["name"] for p in osm_projects.build("testville")]
+    assert names == ["Green Valley Apartments", "Sunrise Residency"]
+    sunrise = json.loads((city / "mb_projects.json").read_text())[1]
+    assert sunrise["locality"] == "Rajpur" and sunrise["mb_id"] == "osmway11"
+
+
+def test_named_building_inside_an_area_society_is_not_a_second_society(city):
+    write_areas(city, [feat("way/2", "Green Valley Apartments", square(78.2, 30.2, 100))])
+    write_named(city, [named("way/16", "Block Aurora", 78.2003, 30.2003)])  # ~40 m from the area's centre
+    assert len(osm_projects.build("testville")) == 1
