@@ -436,14 +436,17 @@ def main(city="gurgaon"):
         events.extend(events_for(s, cfg["name"]))
 
     WEB.mkdir(parents=True, exist_ok=True)
-    doc = {"city": {"id": city, "name": cfg["name"], "center": cfg["center"], "zoom": cfg["zoom"]},
+    srcs = {p.get("source") or "magicbricks" for p in raw}  # which portal (if any) the project list came from
+    portal = "Magicbricks" if "magicbricks" in srcs else "Square Yards" if "squareyards" in srcs else None
+    doc = {"city": {"id": city, "name": cfg["name"], "center": cfg["center"], "zoom": cfg["zoom"], "portal": portal},
             "price_model": model,
             "room_model": room_model,
             "counts": {"listed": len(raw), "on_map": len(societies), "not_located": not_located,
                        "ai_read": sum(1 for s in societies if s.get("ai_read")),
                        "for_sale": sum(s["sale_count"] or 0 for s in societies), "for_rent": sum(s["rent_count"] or 0 for s in societies),
                        "verified": sum(s["verified"] for s in societies)},
-            "sources": (["Magicbricks project pages"] if any(p.get("source") != "openstreetmap" for p in raw) else [])
+            "sources": (["Magicbricks project pages"] if "magicbricks" in srcs else [])
+                       + (["Square Yards project pages"] if "squareyards" in srcs else [])
                        + ["OpenStreetMap contributors"]
                        + (["HRERA Gurugram"] if city == "gurgaon" else []) + ["Builder brochures (verified rows)"],
             "societies": societies, "events": events}

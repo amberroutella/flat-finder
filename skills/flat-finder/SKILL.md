@@ -41,6 +41,22 @@ Explain the verdicts: **match** (every bedroom read and passes), **likely** (roo
 4. Run tests: `cd pipeline && uv run --with pytest pytest` and `cd web && npx vitest run --root .. cli web/src`.
 5. Open a pull request with the new data files. Do not commit `pipeline/cache/` or `osm_buildings.geojson`.
 
+### Job 2 with Square Yards (when Magicbricks has no project list for the city)
+
+Square Yards pages embed schema.org JSON-LD per project (coordinates, RERA number, status, unit sizes, sometimes a price). robots.txt allows project and list pages; the crawler checks it on every request, runs one request per second, and **stops if it is served a block page**.
+
+```bash
+# data/cities.json: add "squareyards": { "slug": "<city>" } to the city
+cd pipeline
+python3 osm_fetch.py <city>          # still needed: outlines, buildings, nearby places
+python3 sy_crawl.py list <city>      # list pages -> out/<city>/sy_urls.json
+python3 sy_crawl.py projects <city>  # project pages -> out/<city>/mb_projects.json (prints how many have RERA, sizes, prices)
+python3 build_city.py <city>
+python3 sy_crawl.py show <project page url>   # debug: shows what was read from one page
+```
+
+Prices are the builder's starting price where Square Yards shows one ("price on request" projects have none); there is no rent data and no resident ratings. Unit sizes feed the BHK and size filters; bedroom dimensions still need Job 3.
+
 ### Job 2 for a city with no crawlable portal (OpenStreetMap societies)
 
 Some cities have no Magicbricks project list, and other portals block scripted requests (Housing.com serves a "Security Alert" page): do not work around a block. Build the society list from OpenStreetMap instead:
