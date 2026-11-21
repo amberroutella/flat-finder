@@ -41,6 +41,19 @@ Explain the verdicts: **match** (every bedroom read and passes), **likely** (roo
 4. Run tests: `cd pipeline && uv run --with pytest pytest` and `cd web && npx vitest run --root .. cli web/src`.
 5. Open a pull request with the new data files. Do not commit `pipeline/cache/` or `osm_buildings.geojson`.
 
+### Job 2 for a city with no crawlable portal (OpenStreetMap societies)
+
+Some cities have no Magicbricks project list, and other portals block scripted requests (Housing.com serves a "Security Alert" page): do not work around a block. Build the society list from OpenStreetMap instead:
+
+```bash
+cd pipeline
+python3 osm_fetch.py <city>       # named residential areas, buildings, parks, schools, hospitals
+python3 osm_projects.py <city>    # society-sized areas -> out/<city>/mb_projects.json (refuses to overwrite a portal crawl)
+python3 build_city.py <city>
+```
+
+Societies are named residential areas between 0.3 and 40 hectares; larger areas become each society's locality. There are **no prices, ratings, unit counts or listings** for these societies, and none are estimated: the site says so. Bedroom sizes come from verified rows (Job 3) as usual. Expect fewer societies than a portal gives, and check the printed counts against what you know of the city.
+
 ## Job 2a: read every floor plan, brochure and HRERA filing with local OCR (free)
 
 On a Mac (uses the built-in Vision framework, no upload):

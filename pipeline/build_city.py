@@ -443,7 +443,8 @@ def main(city="gurgaon"):
                        "ai_read": sum(1 for s in societies if s.get("ai_read")),
                        "for_sale": sum(s["sale_count"] or 0 for s in societies), "for_rent": sum(s["rent_count"] or 0 for s in societies),
                        "verified": sum(s["verified"] for s in societies)},
-            "sources": ["Magicbricks project pages", "OpenStreetMap contributors"]
+            "sources": (["Magicbricks project pages"] if any(p.get("source") != "openstreetmap" for p in raw) else [])
+                       + ["OpenStreetMap contributors"]
                        + (["HRERA Gurugram"] if city == "gurgaon" else []) + ["Builder brochures (verified rows)"],
             "societies": societies, "events": events}
     details = {}
