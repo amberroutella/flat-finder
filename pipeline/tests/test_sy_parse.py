@@ -81,3 +81,19 @@ def test_crawl_list_follows_same_city_list_pages_and_stops_on_block(tmp_path, mo
     sy_crawl.crawl_list("doon")
     urls = json.loads((tmp_path / "out" / "doon" / "sy_urls.json").read_text())
     assert urls == [URL, "https://www.squareyards.com/dehradun-residential-property/second/328200/project"]
+
+
+def test_merges_the_several_nodes_that_describe_one_project():
+    # as on the real page: a web-page style node (suffixed title, no geo/RERA) and the ApartmentComplex node, same url
+    page_node = {"@type": "Product", "@id": URL + "#product", "url": URL, "name": "Bayleaf Heights, Canal Road, Dehradun - Price on Request"}
+    p = sy_parse.parse_project_page(page(page_node, node()), URL)
+    assert p["name"] == "Bayleaf Heights" and p["locality"] == "Canal Road"
+    assert (p["lat"], p["lng"]) == (30.359934, 78.083648) and p["rera_id"] == "UKREP04240000552"
+    p2 = sy_parse.parse_project_page(page(node(), page_node), URL)  # order on the page does not matter
+    assert p2 == p
+
+
+def test_clean_name():
+    assert sy_parse.clean_name("Bayleaf Heights, Canal Road, Dehradun - Price on Request") == ("Bayleaf Heights", "Canal Road")
+    assert sy_parse.clean_name("Doon Aviral Kailasm") == ("Doon Aviral Kailasm", None)
+    assert sy_parse.clean_name("Eden Seniors, Dehradun") == ("Eden Seniors", None)

@@ -146,12 +146,49 @@ def parse_node(n, html_text=""):
             "url": url, "source": "squareyards"}
 
 
+def clean_name(name):
+    """'Bayleaf Heights, Canal Road, Dehradun - Price on Request' -> ('Bayleaf Heights', 'Canal Road')."""
+    n = re.sub(r"\s*[-\u2013|]\s*[^-\u2013|]*(price|rera|dehradun)[^-\u2013|]*$", "", name.strip(), flags=re.I).strip(" ,")
+    parts = [x.strip() for x in n.split(",")]
+    parts = [x for x in parts if x]
+    loc = None
+    if len(parts) > 1:
+        rest = [x for x in parts[1:] if not re.match(r"dehradun|uttarakhand|india$", x, re.I)]
+        loc = rest[0] if rest else None
+    return parts[0] if parts else name.strip(), loc
+
+
+def _rank(n):
+    geo = n.get("geo") or {}
+    return (bool(geo.get("latitude")), "ApartmentComplex" in _types(n), str(n.get("@id") or "").endswith("#project"))
+
+
+def node_summary(html):
+    """What each project node on a page holds, for debugging: type, id, whether it has coordinates, its keys."""
+    return [{"types": _types(n), "id": n.get("@id"), "name": n.get("name"), "has_geo": bool((n.get("geo") or {}).get("latitude")),
+             "keys": sorted(n)} for n in project_nodes(ld_blocks(html))]
+
+
 def parse_project_page(html, url):
-    """The project's own node from its page (the one whose url is the page url), plus unit lines from the page text."""
+    """All nodes on the page that describe this project are merged, best first (coordinates, ApartmentComplex type):
+    the page can describe one project in several nodes, none of which has every field."""
     nodes = project_nodes(ld_blocks(html))
     mine = [n for n in nodes if n["url"].rstrip("/") == url.rstrip("/")] or nodes[:1]
     if not mine:
         return None
     text = re.sub(r"<(script|style)\b.*?</\1>", " ", html, flags=re.S | re.I)  # visible text only: scripts hold other projects' data
     text = re.sub(r"<[^>]+>", " ", text)
-    return parse_node(mine[0], text)
+    mine.sort(key=_rank, reverse=True)
+    merged = None
+    for n in mine:
+        got = parse_node(n, text)
+        if merged is None:
+            merged = got
+            continue
+        for k, v in got.items():
+            if merged.get(k) in (None, [], "", False) and v not in (None, [], "", False):
+                merged[k] = v
+    name, loc = clean_name(merged["name"])
+    merged["name"] = name
+    merged["locality"] = merged.get("locality") or loc
+    return merged
