@@ -88,7 +88,13 @@ def parse_node(n, html_text=""):
     geo = n.get("geo") or {}
     street = ((n.get("address") or {}).get("streetAddress") or "").strip()
     locality = re.sub(r",?\s*Dehradun.*$", "", street, flags=re.I).strip(" ,") or street or None
-    rera = next((i.get("value") for i in (n.get("identifier") or []) if isinstance(i, dict) and i.get("propertyID") == "RERA"), None)
+    ids = n.get("identifier") or []
+    ids = [ids] if isinstance(ids, dict) else ids
+    rera = next((str(i.get("value")).strip() for i in ids if isinstance(i, dict) and i.get("value")
+                 and "rera" in f"{i.get('propertyID')} {i.get('name')}".lower()), None)
+    if not rera:  # an id of the Uttarakhand pattern inside this project's own node (never the rest of the page)
+        m = re.search(r"\bUK[A-Z]{2,5}\d{8,}\b", json.dumps(n))
+        rera = m.group(0) if m else None
 
     def prop(*keys):
         for k, p in props.items():
@@ -100,7 +106,8 @@ def parse_node(n, html_text=""):
     ptype = (prop("property type") or {}).get("value")
     area = prop("total land area")
     acres = _num(area.get("value")) if area and "ac" in str(area.get("unitCode") or area.get("unitText") or "").lower() else None
-    units = _num((prop("number of units", "total units") or {}).get("value"))
+    nu = n.get("numberOfAccommodationUnits")
+    units = _num(nu.get("value") if isinstance(nu, dict) else nu) or _num((prop("number of units", "total units") or {}).get("value"))
     towers = _num((prop("number of towers", "total towers") or {}).get("value"))
     offers = n.get("offers") or {}
     low, high = _num(offers.get("lowPrice")), _num(offers.get("highPrice"))
@@ -111,9 +118,10 @@ def parse_node(n, html_text=""):
     for fp in n.get("accommodationFloorPlan") or []:
         if not isinstance(fp, dict):
             continue
-        m = UNIT_TEXT.search(str(fp.get("name") or ""))
-        bhk = int(float(m.group(1))) if m else (int(_num(fp.get("numberOfBedrooms")) or 0) or None)
-        size = _num(m.group(2)) if m else _num((fp.get("floorSize") or {}).get("value"))
+        m = UNIT_TEXT.search(str(fp.get("name") or "")) or UNIT_TEXT.search(json.dumps(fp))
+        fs = fp.get("floorSize")
+        bhk = int(float(m.group(1))) if m else (int(_num(fp.get("numberOfBedrooms") or fp.get("numberOfRooms")) or 0) or None)
+        size = _num(m.group(2)) if m else _num(fs.get("value") if isinstance(fs, dict) else fs)
         if size:
             units_list.append({"bhk": bhk, "sqft": size})
     units_from_text = False
@@ -161,6 +169,22 @@ def clean_name(name):
 def _rank(n):
     geo = n.get("geo") or {}
     return (bool(geo.get("latitude")), "ApartmentComplex" in _types(n), str(n.get("@id") or "").endswith("#project"))
+
+
+RAW_KEYS = ("identifier", "numberOfAccommodationUnits", "offers", "accommodationFloorPlan", "category", "containedInPlace", "sqy:hasPaymentPlan")
+
+
+def raw_fields(html, limit=450):
+    """The un-parsed value of the fields the parser reads, from the best project node, cut short: for debugging shapes."""
+    nodes = sorted(project_nodes(ld_blocks(html)), key=_rank, reverse=True)
+    n = nodes[0] if nodes else {}
+    out = {}
+    for k in RAW_KEYS:
+        v = n.get(k)
+        if isinstance(v, list):
+            v = v[:2]
+        out[k] = json.dumps(v)[:limit] if v is not None else None
+    return out
 
 
 def node_summary(html):

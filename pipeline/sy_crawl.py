@@ -150,6 +150,7 @@ def show(url):
     blocks = sy_parse.ld_blocks(html)
     print("ld+json blocks:", len(blocks), "| project nodes:", len(sy_parse.project_nodes(blocks)))
     print("nodes:", json.dumps(sy_parse.node_summary(html), indent=1))
+    print("raw fields:", json.dumps(sy_parse.raw_fields(html), indent=1))
     print(json.dumps(sy_parse.parse_project_page(html, url), indent=1))
 
 

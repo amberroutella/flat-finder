@@ -97,3 +97,18 @@ def test_clean_name():
     assert sy_parse.clean_name("Bayleaf Heights, Canal Road, Dehradun - Price on Request") == ("Bayleaf Heights", "Canal Road")
     assert sy_parse.clean_name("Doon Aviral Kailasm") == ("Doon Aviral Kailasm", None)
     assert sy_parse.clean_name("Eden Seniors, Dehradun") == ("Eden Seniors", None)
+
+
+def test_tolerates_other_shapes_for_rera_units_and_floor_plans():
+    n = node(identifier={"@type": "PropertyValue", "name": "RERA Number", "value": "UKREP04240000552"},
+             numberOfAccommodationUnits={"@type": "QuantitativeValue", "value": 8},
+             accommodationFloorPlan=[{"@type": "FloorPlan", "numberOfBedrooms": 3, "floorSize": {"@type": "QuantitativeValue", "value": 2306}}])
+    p = sy_parse.parse_project_page(page(n), URL)
+    assert p["rera_id"] == "UKREP04240000552" and p["units"] == 8
+    assert p["card_units"] == [{"bhk": 3, "sqft": 2306.0, "kind": "10002"}] and not p["units_from_text"]
+
+
+def test_rera_pattern_is_taken_from_the_projects_own_node_only():
+    n = node(identifier=[{"propertyID": "projectId", "value": 328099}], description="Registered as UKREP04240000552 with the authority")
+    other = node(url=URL.replace("328099", "1").replace("bayleaf-heights", "x"), name="X", description="UKREP09990000001")
+    assert sy_parse.parse_project_page(page(other, n), URL)["rera_id"] == "UKREP04240000552"
