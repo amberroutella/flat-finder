@@ -118,10 +118,13 @@ def parse_node(n, html_text=""):
     for fp in n.get("accommodationFloorPlan") or []:
         if not isinstance(fp, dict):
             continue
-        m = UNIT_TEXT.search(str(fp.get("name") or "")) or UNIT_TEXT.search(json.dumps(fp))
+        fname = str(fp.get("name") or "")
+        m = UNIT_TEXT.search(fname)
+        b = re.search(r"(\d(?:\.\d)?)\s*BHK", fname, re.I)
+        sz = re.search(r"([\d,]+(?:\.\d+)?)\s*sq\.?\s*ft", fname, re.I)
         fs = fp.get("floorSize")
-        bhk = int(float(m.group(1))) if m else (int(_num(fp.get("numberOfBedrooms") or fp.get("numberOfRooms")) or 0) or None)
-        size = _num(m.group(2)) if m else _num(fs.get("value") if isinstance(fs, dict) else fs)
+        bhk = int(float((m or b).group(1))) if (m or b) else (int(_num(fp.get("numberOfBedrooms") or fp.get("numberOfRooms")) or 0) or None)
+        size = _num(fs.get("value") if isinstance(fs, dict) else fs) or (_num(m.group(2)) if m else _num(sz.group(1)) if sz else None)
         if size:
             units_list.append({"bhk": bhk, "sqft": size})
     units_from_text = False
@@ -203,15 +206,18 @@ def parse_project_page(html, url):
     text = re.sub(r"<(script|style)\b.*?</\1>", " ", html, flags=re.S | re.I)  # visible text only: scripts hold other projects' data
     text = re.sub(r"<[^>]+>", " ", text)
     mine.sort(key=_rank, reverse=True)
-    merged = None
-    for n in mine:
-        got = parse_node(n, text)
-        if merged is None:
-            merged = got
-            continue
+    parsed = [parse_node(n, text) for n in mine]
+    merged = dict(parsed[0])
+    for got in parsed[1:]:
         for k, v in got.items():
-            if merged.get(k) in (None, [], "", False) and v not in (None, [], "", False):
+            if k in ("card_units", "units_from_text"):
+                continue
+            if merged.get(k) in (None, [], "") and v not in (None, [], ""):
                 merged[k] = v
+    with_units = [g for g in parsed if g["card_units"]]
+    best = next((g for g in with_units if not g["units_from_text"]), with_units[0] if with_units else None)
+    merged["card_units"] = best["card_units"] if best else []
+    merged["units_from_text"] = bool(best and best["units_from_text"])
     name, loc = clean_name(merged["name"])
     merged["name"] = name
     merged["locality"] = merged.get("locality") or loc

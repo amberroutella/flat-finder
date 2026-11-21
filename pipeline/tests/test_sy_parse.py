@@ -112,3 +112,21 @@ def test_rera_pattern_is_taken_from_the_projects_own_node_only():
     n = node(identifier=[{"propertyID": "projectId", "value": 328099}], description="Registered as UKREP04240000552 with the authority")
     other = node(url=URL.replace("328099", "1").replace("bayleaf-heights", "x"), name="X", description="UKREP09990000001")
     assert sy_parse.parse_project_page(page(other, n), URL)["rera_id"] == "UKREP04240000552"
+
+
+def test_real_floor_plan_shape_and_units_do_not_flip_to_text():
+    # as on the real page: names without a dash, size in floorSize; another node of the page has no floor plans
+    fps = [{"@type": "FloorPlan", "name": f"3 BHK {sz} Sq. Ft. Apartment",
+            "floorSize": {"@type": "QuantitativeValue", "name": "Saleable", "value": sz, "unitCode": "FTK", "unitText": "Sq. Ft."}} for sz in (2306, 2344)]
+    best = node(accommodationFloorPlan=fps)
+    thin = {"@type": "ApartmentComplex", "@id": URL + "#project", "url": URL, "name": "Bayleaf Heights",
+            "additionalProperty": [{"@type": "PropertyValue", "name": "Project Status", "value": "New Launch"}]}
+    html = page(thin, best, body="<li>4 BHK Apartment - 2,672 sq. ft. (Saleable)</li>")
+    p = sy_parse.parse_project_page(html, URL)
+    assert p["card_units"] == [{"bhk": 3, "sqft": 2306.0, "kind": "10002"}, {"bhk": 3, "sqft": 2344.0, "kind": "10002"}]
+    assert p["units_from_text"] is False
+
+
+def test_zero_prices_mean_price_on_request():
+    p = sy_parse.parse_project_page(page(node(offers={"@type": "AggregateOffer", "priceCurrency": "INR", "lowPrice": 0, "highPrice": 0})), URL)
+    assert p["price_min"] is None and p["price_max"] is None
